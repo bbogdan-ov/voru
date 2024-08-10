@@ -22,7 +22,7 @@ version = "1.0.204"
 features = ["derive"]
 
 [dependencies.tuich]
-path = "../tuich"
+git = "https://github.com/bbogdan-ov/tuich"
 default-features = false
 features = [
 	"backend-crossterm",

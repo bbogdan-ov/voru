@@ -1068,6 +1068,7 @@ dependencies = [
 [[package]]
 name = "tuich"
 version = "0.1.2"
+source = "git+https://github.com/bbogdan-ov/tuich#fa21c9e02a57852959b563c7bd56060e5049b00c"
 dependencies = [
  "compact_str",
  "crossterm",
