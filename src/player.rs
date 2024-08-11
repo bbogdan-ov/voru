@@ -294,8 +294,17 @@ impl Player {
 
         self.play(index - 1)
     }
+    /// Will resume playback if the current track is paused or play it again if this track is ended
     pub fn resume(&mut self) -> PlaybackResult {
-        self.playback.resume()
+        if self.playstate() == PlayState::Ended {
+            if let Some(cur_index) = self.cur_track_index {
+                self.play(cur_index)?;
+            }
+        } else {
+            self.playback.resume()?;
+        }
+
+        Ok(())
     }
     pub fn pause(&mut self) -> PlaybackResult {
         self.playback.pause()
