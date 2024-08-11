@@ -13,7 +13,7 @@ mod commands;
 
 use std::{io::{self, Read}, ops::BitOr, sync::mpsc, thread};
 
-use app::App;
+use app::{App, AppContext, Mode, State, View};
 use cache::Cache;
 use commands::Commands;
 use config::{default_config_path, Config, ConfigError};
@@ -23,6 +23,31 @@ use rodio::OutputStream;
 use thiserror::Error;
 use tuich::{backend::{crossterm::CrosstermBackend, BackendEvent, BackendEventReader}, event::Event, terminal::Terminal};
 use widget::ListEvent;
+
+// Errors
+#[derive(Debug, Error)]
+enum AppError {
+    #[error("I/O error: {0}")]
+    Io(io::Error),
+    #[error("Environment variable error: {0}")]
+    Var(std::env::VarError),
+    #[error("Config error: {0}")]
+    Config(ConfigError),
+    #[error("Load playlists error: {0}")]
+    LoadPlaylists(LoadPlaylistsError),
+    #[error("Audio stream error: {0}")]
+    AudioStream(rodio::StreamError),
+}
+impl From<io::Error> for AppError {
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+impl From<std::env::VarError> for AppError {
+    fn from(value: std::env::VarError) -> Self {
+        Self::Var(value)
+    }
+}
 
 // Consts
 const TICK_INTERVAL: u64 = 500;
@@ -61,31 +86,6 @@ impl From<ListEvent> for Action {
     }
 }
 
-// Errors
-#[derive(Debug, Error)]
-enum AppError {
-    #[error("I/O error: {0}")]
-    Io(io::Error),
-    #[error("Environment variable error: {0}")]
-    Var(std::env::VarError),
-    #[error("Config error: {0}")]
-    Config(ConfigError),
-    #[error("Load playlists error: {0}")]
-    LoadPlaylists(LoadPlaylistsError),
-    #[error("Audio stream error: {0}")]
-    AudioStream(rodio::StreamError),
-}
-impl From<io::Error> for AppError {
-    fn from(value: io::Error) -> Self {
-        Self::Io(value)
-    }
-}
-impl From<std::env::VarError> for AppError {
-    fn from(value: std::env::VarError) -> Self {
-        Self::Var(value)
-    }
-}
-
 fn main() {
     match run() {
         Ok(_) => (),
@@ -116,12 +116,29 @@ fn run() -> Result<(), AppError> {
     let (_stream, stream_handle) = OutputStream::try_default()
         .map_err(AppError::AudioStream)?;
 
+    // Init cache
     let mut cache = Cache::new();
 
     // Load playlists
     let playlists = playlists_form_config(&mut cache, &config)
         .map_err(AppError::LoadPlaylists)?;
-    let mut player = Player::new(stream_handle, playlists);
+    let player = Player::new(stream_handle, playlists);
+
+    // Init state
+    let state = State {
+        mode: Mode::Normal,
+        view: View::default(),
+        notif: None
+    };
+
+    // Init app context
+    let mut ctx = AppContext {
+        config,
+        state,
+        player,
+        cache,
+        commands
+    };
 
     // Init terminal
     let mut term: Term = Terminal::classic(CrosstermBackend::default())?;
@@ -135,9 +152,7 @@ fn run() -> Result<(), AppError> {
     handle_tick(sender.clone());
 
     draw(
-        &commands,
-        &config,
-        &player,
+        &ctx,
         &mut term,
         &mut app,
     )?;
@@ -145,19 +160,13 @@ fn run() -> Result<(), AppError> {
     loop {
         let action = match receiver.recv() {
             Ok(UpdateKind::Tick) => {
-                player.handle_tick();
+                ctx.player.handle_tick();
                 Action::Draw
             },
             Ok(UpdateKind::Event(event)) => {
                 match event {
                     Event::Key(key, _) => {
-                        app.handle_key(
-                            &mut cache,
-                            &commands,
-                            &config,
-                            &mut player,
-                            key,
-                        )
+                        app.handle_key(&mut ctx, key)
                     },
                     Event::Resize(w, h) => Action::Resize(w, h),
                     _ => Action::Nope
@@ -174,18 +183,14 @@ fn run() -> Result<(), AppError> {
         }
 
         draw(
-            &commands,
-            &config,
-            &player,
+            &ctx,
             &mut term,
             &mut app,
         )?;
     }
 }
 fn draw(
-    commands: &Commands,
-    config: &Config,
-    player: &Player,
+    ctx: &AppContext,
     term: &mut Term,
     app: &mut App,
 ) -> io::Result<()> {
@@ -193,9 +198,7 @@ fn draw(
 
     term.clear();
     app.draw(
-        commands,
-        config,
-        player,
+        &ctx,
         &mut term.buffer,
         rect,
     );

@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, rc::Rc, time::Duration};
 
 use thiserror::Error;
 
-use crate::{app::{State, UpdateError}, cache::Cache, player::{Player, QueueTrack}, track::Track, traits::Expand, Action};
+use crate::{app::{AppContext, UpdateError}, player::QueueTrack, track::Track, traits::Expand, Action};
 
 // Errors
 #[derive(Debug, Error)]
@@ -164,62 +164,60 @@ impl Commands {
             ("shuffle",       Cmd::Alias(CmdKind::QueueShuffle, "queue-shuffle")),
         ]);
 
-        Self {
-            list
-        }
-    }
-
-    /// Execute command with args by given string
-    /// For example: `"queue-add ~/my-cool-music-dir/*"`
-    pub fn exec<S: AsRef<str>>(&self, cache: &mut Cache, state: &mut State, player: &mut Player, command: S) -> Result<Action, UpdateError> {
-        let command = command.as_ref().trim();
-        let (cmd_str, args_str) = match command.split_once(' ') {
-            Some((cmd, args)) => (cmd, args.trim()),
-            None => (command, "")
-        };
-        let args: Vec<&str> = args_str
-            .split(' ')
-            .filter(|a| !a.is_empty())
-            .collect();
-
-        let first_arg = args.get(0);
-
-        let cmd = self.list.get(cmd_str)
-            .ok_or(CmdError::NoSuchCmd)?;
-
-        match cmd.kind() {
-            CmdKind::Quit => return Ok(Action::Quit),
-            CmdKind::Hello => state.notify("hey"),
-            CmdKind::Echo => state.notify(args_str),
-
-            CmdKind::PlayNext => player.play_next()?,
-            CmdKind::PlayPrev => player.play_prev()?,
-            CmdKind::Replay => player.replay()?,
-            CmdKind::Resume => player.resume()?,
-            CmdKind::Pause => player.pause()?,
-            CmdKind::Stop => player.stop()?,
-            CmdKind::Toggle => player.toggle()?,
-            CmdKind::Seek => player.seek(parse_secs(args.get(0))?)?,
-            CmdKind::SeekForward => player.seek_forward(parse_secs(first_arg)?)?,
-            CmdKind::SeekBackward => player.seek_backward(parse_secs(first_arg)?)?,
-            CmdKind::Volume => player.set_volume(parse_percent(first_arg)?)?,
-            CmdKind::VolumeUp => player.volume_up(parse_percent(first_arg)?)?,
-            CmdKind::VolumeDown => player.volume_down(parse_percent(first_arg)?)?,
-            CmdKind::VolumeReset => player.set_volume(1.0)?,
-            CmdKind::Mute => player.set_muted(true)?,
-            CmdKind::Unmute => player.set_muted(false)?,
-            CmdKind::MuteToggle => player.mute_toggle()?,
-
-            CmdKind::QueueAdd => cmd_add(cache, state, player, args)?,
-            CmdKind::QueueClear => player.queue_clear()?,
-            CmdKind::QueueShuffle => player.queue_shuffle(),
-        }
-
-        Ok(Action::Draw)
+        Self { list }
     }
 }
 
-fn cmd_add(cache: &mut Cache, state: &mut State, player: &mut Player, args: Vec<&str>) -> Result<(), UpdateError> {
+/// Execute command with args by given string
+/// For example: `"queue-add ~/my-cool-music-dir/*"`
+pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<Action, UpdateError> {
+    let command = command.as_ref().trim();
+    let (cmd_str, args_str) = match command.split_once(' ') {
+        Some((cmd, args)) => (cmd, args.trim()),
+        None => (command, "")
+    };
+    let args: Vec<&str> = args_str
+        .split(' ')
+        .filter(|a| !a.is_empty())
+        .collect();
+
+    let first_arg = args.get(0);
+
+    let cmd = ctx.commands.list.get(cmd_str)
+        .ok_or(CmdError::NoSuchCmd)?;
+
+    match cmd.kind() {
+        CmdKind::Quit => return Ok(Action::Quit),
+        CmdKind::Hello => ctx.state.notify("hey"),
+        CmdKind::Echo => ctx.state.notify(args_str),
+
+        CmdKind::PlayNext => ctx.player.play_next()?,
+        CmdKind::PlayPrev => ctx.player.play_prev()?,
+        CmdKind::Replay => ctx.player.replay()?,
+        CmdKind::Resume => ctx.player.resume()?,
+        CmdKind::Pause => ctx.player.pause()?,
+        CmdKind::Stop => ctx.player.stop()?,
+        CmdKind::Toggle => ctx.player.toggle()?,
+        CmdKind::Seek => ctx.player.seek(parse_secs(args.get(0))?)?,
+        CmdKind::SeekForward => ctx.player.seek_forward(parse_secs(first_arg)?)?,
+        CmdKind::SeekBackward => ctx.player.seek_backward(parse_secs(first_arg)?)?,
+        CmdKind::Volume => ctx.player.set_volume(parse_percent(first_arg)?)?,
+        CmdKind::VolumeUp => ctx.player.volume_up(parse_percent(first_arg)?)?,
+        CmdKind::VolumeDown => ctx.player.volume_down(parse_percent(first_arg)?)?,
+        CmdKind::VolumeReset => ctx.player.set_volume(1.0)?,
+        CmdKind::Mute => ctx.player.set_muted(true)?,
+        CmdKind::Unmute => ctx.player.set_muted(false)?,
+        CmdKind::MuteToggle => ctx.player.mute_toggle()?,
+
+        CmdKind::QueueAdd => cmd_add(ctx, args)?,
+        CmdKind::QueueClear => ctx.player.queue_clear()?,
+        CmdKind::QueueShuffle => ctx.player.queue_shuffle(),
+    }
+
+    Ok(Action::Draw)
+}
+
+fn cmd_add(ctx: &mut AppContext, args: Vec<&str>) -> Result<(), UpdateError> {
     if args.is_empty() {
         return Err(CmdError::NotEnoughArgs.into());
     }
@@ -237,7 +235,7 @@ fn cmd_add(cache: &mut Cache, state: &mut State, player: &mut Player, args: Vec<
                 return Err(CmdError::NoSuchFile(path).into());
             }
             if !path.is_file() { continue }
-            let Ok(track) = Track::from_path(cache, path) else {
+            let Ok(track) = Track::from_path(&mut ctx.cache, path) else {
                 continue;
             };
 
@@ -245,8 +243,8 @@ fn cmd_add(cache: &mut Cache, state: &mut State, player: &mut Player, args: Vec<
         }
     }
 
-    state.notify(format!("{} tracks were added", tracks.len()));
-    player.queue_add_tracks(tracks);
+    ctx.state.notify(format!("{} tracks were added", tracks.len()));
+    ctx.player.queue_add_tracks(tracks);
     Ok(())
 }
 

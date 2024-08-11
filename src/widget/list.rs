@@ -1,8 +1,15 @@
 use std::borrow::Cow;
 
-use tuich::{buffer::Buffer, event::Key, layout::{Clip, Rect}, style::Style, text::Text, widget::{Clear, Draw, RefDraw}};
+use tuich::{
+    buffer::Buffer,
+    event::Key,
+    layout::{Clip, Rect},
+    style::Style,
+    text::Text,
+    widget::{Clear, Draw, RefDraw},
+};
 
-use crate::{config::Config, match_keys};
+use crate::{app::AppContext, match_keys};
 
 /// List event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,17 +54,17 @@ impl ListState {
         self
     }
 
-    pub fn handle_key(&mut self, config: &Config, key: Key) -> ListEvent {
+    pub fn handle_key(&mut self, ctx: &AppContext, key: Key) -> ListEvent {
         match_keys! {
-            config, key,
+            ctx.config, key,
 
             choose_item => ListEvent::Chosen(self.current()),
             select_next_item => self.select_next(1),
             select_prev_item => self.select_prev(1),
-            select_next_item_fast => self.select_next(config.fast_jump),
-            select_prev_item_fast => self.select_prev(config.fast_jump),
-            select_next_item_super_fast => self.select_next(config.super_fast_jump),
-            select_prev_item_super_fast => self.select_prev(config.super_fast_jump),
+            select_next_item_fast => self.select_next(ctx.config.fast_jump),
+            select_prev_item_fast => self.select_prev(ctx.config.fast_jump),
+            select_next_item_super_fast => self.select_next(ctx.config.super_fast_jump),
+            select_prev_item_super_fast => self.select_prev(ctx.config.super_fast_jump),
             select_first_item => self.select_first(),
             select_last_item => self.select_last();
 

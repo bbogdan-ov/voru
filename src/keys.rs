@@ -24,7 +24,7 @@
 /// ```
 #[macro_export]
 macro_rules! match_keys {
-    ($config:ident, $key:ident, $($keymap:ident => $do:expr$(,)?)*; else $otherwise:block) => {
+    ($config:expr, $key:ident, $($keymap:ident => $do:expr$(,)?)*; else $otherwise:block) => {
         if false { unreachable!() }
         $(else if $config.keys.$keymap.as_ref().is_some_and(|k| k.contains(&$key)) { $do })*
         else $otherwise

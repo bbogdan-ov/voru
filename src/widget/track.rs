@@ -1,6 +1,6 @@
 use tuich::{buffer::{Buffer, Cell}, layout::{Align, Clip, Rect, Stack}, style::Color, text::Text, widget::{Clear, Draw}};
 
-use crate::{config::Config, player::PlayState, track::Track, traits::ToReadable};
+use crate::{app::AppContext, player::PlayState, track::Track, traits::ToReadable};
 
 use super::ListState;
 
@@ -38,12 +38,10 @@ impl TrackTable {
 }
 
 /// Track widget
-#[derive(Debug)]
 pub struct TrackWidget<'a> {
     pub index: usize,
     pub state: &'a ListState,
-    pub config: &'a Config,
-    pub playstate: PlayState,
+    pub ctx: &'a AppContext,
     pub track: &'a Track,
     pub playing: bool,
 }
@@ -56,17 +54,17 @@ impl<'a> TrackWidget<'a> {
         let artist_rect = table.artist_rect.with_y(rect.y);
 
         let is_cur = self.state.active && self.state.current() == self.index;
-        let is_paused = self.playing && self.playstate != PlayState::Playing;
+        let is_paused = self.playing && self.ctx.player.playstate() != PlayState::Playing;
 
         let style =
-            if is_cur && is_paused { self.config.theme.track.selected_paused }
-            else if is_paused { self.config.theme.track.paused }
+            if is_cur && is_paused { self.ctx.config.theme.track.selected_paused }
+            else if is_paused { self.ctx.config.theme.track.paused }
 
-            else if is_cur && self.playing { self.config.theme.track.selected_playing }
-            else if self.playing { self.config.theme.track.playing }
+            else if is_cur && self.playing { self.ctx.config.theme.track.selected_playing }
+            else if self.playing { self.ctx.config.theme.track.playing }
 
-            else if is_cur { self.config.theme.track.selected }
-            else { self.config.theme.track.normal };
+            else if is_cur { self.ctx.config.theme.track.selected }
+            else { self.ctx.config.theme.track.normal };
 
         let title = self.track.title();
 
@@ -75,7 +73,7 @@ impl<'a> TrackWidget<'a> {
             .align(Align::End)
             .draw(buf, index_rect);
         // Draw title
-        Text::from(title)
+         Text::from(title)
             .clip(Clip::Ellipsis)
             .draw(buf, title_rect);
         // Draw album

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tuich::{buffer::Buffer, layout::{Align, Clip, Rect}, style::{Style, Stylized}, text::Text, widget::{Draw, RefDraw}};
 
-use crate::{config::Config, player::{PlayState, Player}, traits::ToReadable};
+use crate::{app::AppContext, player::PlayState, traits::ToReadable};
 
 use super::Progress;
 
@@ -18,8 +18,7 @@ pub enum PlayerStyle {
 
 /// Player widget
 pub struct PlayerWidget<'a> {
-    pub config: &'a Config,
-    pub player: &'a Player,
+    pub ctx: &'a AppContext,
     pub style: PlayerStyle
 }
 impl<'a> PlayerWidget<'a> {
@@ -41,36 +40,36 @@ impl<'a> RefDraw for PlayerWidget<'a> {
     fn draw(&self, buf: &mut Buffer, rect: Rect) -> Rect {
         let rect = Self::style_rect(rect, self.style);
 
-        let playstate = self.player.playstate();
+        let playstate = self.ctx.player.playstate();
         let style = match playstate {
-            PlayState::Stopped => self.config.theme.player.stopped,
-            PlayState::Playing => self.config.theme.player.playing,
-            _ => self.config.theme.player.paused
+            PlayState::Stopped => self.ctx.config.theme.player.stopped,
+            PlayState::Playing => self.ctx.config.theme.player.playing,
+            _ => self.ctx.config.theme.player.paused
         };
 
         match self.style {
             PlayerStyle::Classic |
-            PlayerStyle::ClassicReverse => draw_classic(&self, style, buf, rect),
+            PlayerStyle::ClassicReverse => draw_classic(self, &self.ctx, style, buf, rect),
 
-            PlayerStyle::Progress => draw_progress(&self, style, buf, rect),
+            PlayerStyle::Progress => draw_progress(&self.ctx, style, buf, rect),
 
-            PlayerStyle::Text => draw_info(&self, style, buf, rect),
+            PlayerStyle::Text => draw_info(&self.ctx, style, buf, rect),
         }
     }
 }
 
 // Draw styles
-fn draw_info(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
+fn draw_info(ctx: &AppContext, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
     let rect = rect.with_height(1);
 
-    if let Some(track) = &widget.player.cur_track {
-        let playstate = widget.player.playstate();
+    if let Some(track) = &ctx.player.cur_track {
+        let playstate = ctx.player.playstate();
         let title = track.title();
         let volume =
-            if widget.player.muted() { "muted".to_string() }
-            else { format!("{}%", (widget.player.volume() * 100.0).round()) };
-        let pos = widget.player.pos();
-        let dur = widget.player.duration();
+            if ctx.player.muted() { "muted".to_string() }
+            else { format!("{}%", (ctx.player.volume() * 100.0).round()) };
+        let pos = ctx.player.pos();
+        let dur = ctx.player.duration();
 
         // Draw play info
         let play_info_rect = Text::new(format!("{} / {}  {}", pos.to_readable(), dur.to_readable(), volume), style)
@@ -91,7 +90,7 @@ fn draw_info(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rect) 
         };
     } else {
         // Draw something else...
-        Text::new("There should be some smart quote... - Unknown man", widget.config.theme.player.stopped)
+        Text::new("There should be some smart quote... - Unknown man", ctx.config.theme.player.stopped)
             .italic()
             .clip(Clip::Ellipsis)
             .draw(buf, rect);
@@ -99,22 +98,22 @@ fn draw_info(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rect) 
 
     rect
 }
-fn draw_progress(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
-    let pos = widget.player.pos();
-    let dur = widget.player.duration();
+fn draw_progress(ctx: &AppContext, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
+    let pos = ctx.player.pos();
+    let dur = ctx.player.duration();
     let progress = pos.as_secs() as f32 / dur.as_secs() as f32;
 
     // Draw audio progress
     Progress::new(progress)
         .with_style(style)
-        .with_char(widget.config.format.progress.to_string())
-        .with_track_char(widget.config.format.progress_track.to_string())
-        .with_thumb(&widget.config.format.progress_thumb)
+        .with_char(ctx.config.format.progress.to_string())
+        .with_track_char(ctx.config.format.progress_track.to_string())
+        .with_thumb(&ctx.config.format.progress_thumb)
         .draw(buf, rect);
 
     rect
 }
-fn draw_classic(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
+fn draw_classic(widget: &PlayerWidget, ctx: &AppContext, style: Style, buf: &mut Buffer, rect: Rect) -> Rect {
     let is_reversed = widget.style == PlayerStyle::ClassicReverse;
 
     let text_rect =
@@ -124,8 +123,8 @@ fn draw_classic(widget: &PlayerWidget, style: Style, buf: &mut Buffer, rect: Rec
         if is_reversed { rect.margin_top(1) }
         else { rect };
 
-    draw_info(widget, style, buf, text_rect);
-    draw_progress(widget, style, buf, progress_rect);
+    draw_info(ctx, style, buf, text_rect);
+    draw_progress(ctx, style, buf, progress_rect);
 
     rect
 }

@@ -125,10 +125,17 @@ impl State {
     }
 }
 
+/// App context
+pub struct AppContext {
+    pub config: Config,
+    pub state: State,
+    pub player: Player,
+    pub cache: Cache,
+    pub commands: Commands
+}
+
 /// App
 pub struct App {
-    pub state: State,
-
     cmdline: CmdLine,
     player_view: PlayerView,
     playlists_view: PlaylistsView,
@@ -137,12 +144,6 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         Self {
-            state: State {
-                mode: Mode::Normal,
-                view: View::default(),
-                notif: None
-            },
-
             cmdline: CmdLine::new(),
             player_view: PlayerView::new(),
             playlists_view: PlaylistsView::new(),
@@ -152,13 +153,10 @@ impl App {
 
     pub fn handle_key(
         &mut self,
-        cache: &mut Cache,
-        commands: &Commands,
-        config: &Config,
-        player: &mut Player,
+        ctx: &mut AppContext,
         key: Key,
     ) -> Action {
-        let result = self.try_handle_key(cache, commands, config, player, key);
+        let result = self.try_handle_key(ctx, key);
 
         match result {
             Ok(action) => action,
@@ -167,7 +165,7 @@ impl App {
                 use self::UpdateError::Cmd as C;
 
                 // Catch an error and display it
-                self.state.notif = match e {
+                ctx.state.notif = match e {
                     P(PlaybackError::Io(e)) if e.kind() == io::ErrorKind::NotFound
                         => Some(Notif::Error("Couldn't play the track: No such file".into())),
                     P(PlaybackError::Play(
@@ -194,68 +192,58 @@ impl App {
     }
     fn try_handle_key(
         &mut self,
-        cache: &mut Cache,
-        commands: &Commands,
-        config: &Config,
-        player: &mut Player,
+        ctx: &mut AppContext,
         key: Key,
     ) -> Result<Action, UpdateError> {
-        let action = if self.state.notif.is_some() {
-            self.state.notif = None;
+        let action = if ctx.state.notif.is_some() {
+            ctx.state.notif = None;
             Action::Draw
         } else {
             Action::Nope
         };
 
-        let action = action | match self.state.mode {
-            Mode::Normal => self.handle_normal_mode_key(config, player, key)?,
-            Mode::Cmd => self.cmdline.handle_key(
-                cache,
-                commands,
-                config,
-                &mut self.state,
-                player,
-                key,
-            )?
+        let action = action | match ctx.state.mode {
+            Mode::Normal => self.handle_normal_mode_key(ctx, key)?,
+            Mode::Cmd => self.cmdline.handle_key(ctx, key)?
         };
 
         Ok(action)
     }
 
-    fn handle_normal_mode_key(&mut self, config: &Config, player: &mut Player, key: Key) -> Result<Action, UpdateError> {
+    fn handle_normal_mode_key(&mut self, ctx: &mut AppContext, key: Key) -> Result<Action, UpdateError> {
         match_keys! {
-            config, key,
+            ctx.config, key,
 
-            enter_cmd => self.state.enter_mode(Mode::Cmd),
+            enter_cmd => ctx.state.enter_mode(Mode::Cmd),
 
-            next_view => self.state.next_view(),
-            prev_view => self.state.prev_view(),
+            next_view => ctx.state.next_view(),
+            prev_view => ctx.state.prev_view(),
 
-            play_next => player.play_next()?,
-            play_prev => player.play_prev()?,
-            replay => player.replay()?,
-            resume => player.resume()?,
-            pause => player.pause()?,
-            stop => player.stop()?,
-            toggle => player.toggle()?,
-            seek_forward => player.seek_forward(Dur::from_secs(config.seek_jump))?,
-            seek_backward => player.seek_backward(Dur::from_secs(config.seek_jump))?,
-            volume_up => player.volume_up(config.volume_jump)?,
-            volume_down => player.volume_down(config.volume_jump)?,
-            volume_reset => player.set_volume(1.0)?,
-            mute => player.set_muted(true)?,
-            unmute => player.set_muted(false)?,
-            mute_toggle => player.mute_toggle()?,
+            play_next => ctx.player.play_next()?,
+            play_prev => ctx.player.play_prev()?,
+            replay => ctx.player.replay()?,
+            resume => ctx.player.resume()?,
+            pause => ctx.player.pause()?,
+            stop => ctx.player.stop()?,
+            toggle => ctx.player.toggle()?,
+            seek_forward => ctx.player.seek_forward(Dur::from_secs(ctx.config.seek_jump))?,
+            seek_backward => ctx.player.seek_backward(Dur::from_secs(ctx.config.seek_jump))?,
+            volume_up => ctx.player.volume_up(ctx.config.volume_jump)?,
+            volume_down => ctx.player.volume_down(ctx.config.volume_jump)?,
+            volume_reset => ctx.player.set_volume(1.0)?,
+            mute => ctx.player.set_muted(true)?,
+            unmute => ctx.player.set_muted(false)?,
+            mute_toggle => ctx.player.mute_toggle()?,
 
-            queue_shuffle => player.queue_shuffle(),
+            queue_shuffle => ctx.player.queue_shuffle(),
 
             quit => return Ok(Action::Quit);
 
             else {
-                return Ok(match self.state.view {
+                return Ok(match ctx.state.view {
                     View::Tracks |
-                    View::Playlists => self.playlists_view.handle_key(config, player, &self.state, key)?,
-                    View::Queue => self.queue_view.handle_key(config, player, key)?,
+                    View::Playlists => self.playlists_view.handle_key(ctx, key)?,
+                    View::Queue => self.queue_view.handle_key(ctx, key)?,
                     View::Player => Action::Nope
                 })
             }
@@ -266,32 +254,29 @@ impl App {
 
     pub fn draw(
         &mut self,
-        commands: &Commands,
-        config: &Config,
-        player: &Player,
+        ctx: &AppContext,
         buf: &mut Buffer,
         rect: Rect,
     ) -> Rect {
         let max_width =
-            if config.layout.max_width == 0 { rect.width }
-            else { config.layout.max_width };
+            if ctx.config.layout.max_width == 0 { rect.width }
+            else { ctx.config.layout.max_width };
         let max_height =
-            if config.layout.max_height == 0 { rect.height }
-            else { config.layout.max_height };
+            if ctx.config.layout.max_height == 0 { rect.height }
+            else { ctx.config.layout.max_height };
 
-        let rect = rect.margin((config.layout.padding_x, config.layout.padding_y));
+        let rect = rect.margin((ctx.config.layout.padding_x, ctx.config.layout.padding_y));
         let rect = rect
             .min_size((max_width, max_height))
             .align_center(rect);
 
         // Draw player only in the playlists and queue views
-        let player_rect = match self.state.view {
+        let player_rect = match ctx.state.view {
             View::Tracks |
             View::Playlists |
             View::Queue => PlayerWidget {
-                config,
-                player,
-                style: config.style.player,
+                ctx,
+                style: ctx.config.style.player,
             }.draw(buf, rect.with_y(rect.bottom()).sub_y(2)),
 
             _ => Rect::default()
@@ -300,22 +285,22 @@ impl App {
         let view_rect = rect.margin_bottom(player_rect.height + 1);
 
         // Draw the views
-        match self.state.view {
-            View::Player => self.player_view.draw(config, player, buf, view_rect),
+        match ctx.state.view {
+            View::Player => self.player_view.draw(ctx, buf, view_rect),
             View::Tracks |
-            View::Playlists => self.playlists_view.draw(config, player, &self.state, buf, view_rect),
-            View::Queue => self.queue_view.draw(config, player, buf, view_rect)
+            View::Playlists => self.playlists_view.draw(ctx, buf, view_rect),
+            View::Queue => self.queue_view.draw(ctx, buf, view_rect)
         };
 
         // Draw error message
-        if let Some(notif) = &self.state.notif {
+        if let Some(notif) = &ctx.state.notif {
             // Place message at the top
             let error_rect = rect
                 .with_height(1);
 
             let style = match notif {
-                Notif::Normal(_) => config.theme.notif_normal,
-                Notif::Error(_) => config.theme.notif_error,
+                Notif::Normal(_) => ctx.config.theme.notif_normal,
+                Notif::Error(_) => ctx.config.theme.notif_error,
             };
 
             Clear::new(style)
@@ -326,10 +311,9 @@ impl App {
         }
 
         // Draw command line at the top
-        if self.state.mode == Mode::Cmd {
+        if ctx.state.mode == Mode::Cmd {
             self.cmdline.draw(
-                commands,
-                config,
+                ctx,
                 buf,
                 rect,
             );

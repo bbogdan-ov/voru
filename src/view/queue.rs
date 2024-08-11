@@ -6,9 +6,9 @@ use tuich::{
 };
 
 use crate::{
-    config::Config,
+    app::AppContext,
     match_keys,
-    player::{PlaybackError, PlaybackResult, Player},
+    player::{PlaybackError, PlaybackResult},
     traits::ToReadable,
     widget::{List, ListState, TrackTable, TrackWidget, ViewWidget},
     Action,
@@ -26,71 +26,70 @@ impl QueueView {
         }
     }
 
-    pub fn handle_key(&mut self, config: &Config, player: &mut Player, key: Key) -> Result<Action, PlaybackError> {
+    pub fn handle_key(&mut self, ctx: &mut AppContext, key: Key) -> Result<Action, PlaybackError> {
         match_keys! {
-            config, key,
+            ctx.config, key,
 
-            play => player.play(self.cur_track())?,
-            queue_focus => self.focus(player),
-            queue_move_up => self.move_up(player, 1)?,
-            queue_move_down => self.move_down(player, 1)?,
-            queue_remove => player.queue_remove(self.cur_track())?;
+            play => ctx.player.play(self.cur_track())?,
+            queue_focus => self.focus(ctx),
+            queue_move_up => self.move_up(ctx, 1)?,
+            queue_move_down => self.move_down(ctx, 1)?,
+            queue_remove => ctx.player.queue_remove(self.cur_track())?;
 
             else {
-                return Ok(self.list_state.handle_key(config, key).into())
+                return Ok(self.list_state.handle_key(ctx, key).into())
             }
         }
 
         Ok(Action::Draw)
     }
 
-    fn focus(&mut self, player: &Player) {
-        if let Some(index) = player.cur_track_index {
+    fn focus(&mut self, ctx: &AppContext) {
+        if let Some(index) = ctx.player.cur_track_index {
             self.list_state.select(index);
         }
     }
-    fn move_up(&mut self, player: &mut Player, jump: usize) -> PlaybackResult {
+    fn move_up(&mut self, ctx: &mut AppContext, jump: usize) -> PlaybackResult {
         let cur = self.list_state.current();
         let new_index = cur.saturating_sub(jump);
-        player.queue_move_to(cur, new_index)?;
+        ctx.player.queue_move_to(cur, new_index)?;
         self.list_state.select(new_index);
         Ok(())
     }
-    fn move_down(&mut self, player: &mut Player, jump: usize) -> PlaybackResult {
+    fn move_down(&mut self, ctx: &mut AppContext, jump: usize) -> PlaybackResult {
         let cur = self.list_state.current();
         let new_index = cur + jump;
-        player.queue_move_to(cur, new_index)?;
+        ctx.player.queue_move_to(cur, new_index)?;
         self.list_state.select(new_index);
         Ok(())
     }
 
-    pub fn draw(&mut self, config: &Config, player: &Player, buf: &mut Buffer, rect: Rect) -> Rect {
-        let playstate = player.playstate();
-        let tracks_count = player.queue.len();
-        let queue_dur = player.queue_dur.to_readable();
+    pub fn draw(&mut self, ctx: &AppContext, buf: &mut Buffer, rect: Rect) -> Rect {
+        let playstate = ctx.player.playstate();
+        let tracks_count = ctx.player.queue.len();
+        let queue_dur = ctx.player.queue_dur.to_readable();
 
-        let desc = if let Some(cur_index) = player.cur_track_index {
-            let elapsed = (player.elapsed + player.pos()).to_readable();
+        let desc = if let Some(cur_index) = ctx.player.cur_track_index {
+            let elapsed = (ctx.player.elapsed + ctx.player.pos()).to_readable();
             format!("{} / {} tracks  {} / {}", cur_index + 1, tracks_count, elapsed, queue_dur)
         } else {
             format!("{} tracks  {}", tracks_count, queue_dur)
         };
 
-        let content_rect = ViewWidget::new(config, playstate, "Queue")
+        let content_rect = ViewWidget::new(&ctx.config, playstate, "Queue")
             .with_desc(desc)
             .draw(buf, rect);
 
         let table = TrackTable::new(tracks_count, content_rect);
 
-        List::new(&mut self.list_state, &player.queue)
+        List::new(&mut self.list_state, &ctx.player.queue)
             .draw(buf, content_rect, |index, track, list_state, buf, rect| {
                 TrackWidget {
                     index,
-                    config,
                     state: list_state,
-                    playstate,
+                    ctx,
                     track,
-                    playing: player.is_track_index_current(&index)
+                    playing: ctx.player.is_track_index_current(&index)
                 }.draw(&table, buf, rect)
             });
 

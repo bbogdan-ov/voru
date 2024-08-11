@@ -1,6 +1,17 @@
-use tuich::{buffer::Buffer, event::Key, layout::{Clip, Rect}, text::Text, widget::{prompt::PromptState, Clear, Draw, Prompt}};
+use tuich::{
+    buffer::Buffer,
+    event::Key,
+    layout::{Clip, Rect},
+    text::Text,
+    widget::{prompt::PromptState, Clear, Draw, Prompt},
+};
 
-use crate::{app::{State, UpdateError}, cache::Cache, commands::{Cmd, Commands}, config::Config, match_keys, player::Player, Action};
+use crate::{
+    app::{AppContext, UpdateError},
+    commands::{exec_command, Cmd},
+    match_keys,
+    Action,
+};
 
 /// Command line
 #[derive(Debug)]
@@ -22,23 +33,19 @@ impl CmdLine {
 
     pub fn handle_key(
         &mut self,
-        cache: &mut Cache,
-        commands: &Commands,
-        config: &Config,
-        state: &mut State,
-        player: &mut Player,
+        ctx: &mut AppContext,
         key: Key,
     ) -> Result<Action, UpdateError> {
         match_keys! {
-            config, key,
+            ctx.config, key,
 
-            enter => return self.execute(cache, commands, state, player),
+            enter => return self.execute(ctx),
             escape => {
                 if self.is_completing {
                     // Don't exit if completion was enabled, just turn it off
                     self.is_completing = false;
                 } else {
-                    self.exit(state)
+                    self.exit(ctx)
                 }
             },
             complete => self.is_completing = true,
@@ -51,23 +58,17 @@ impl CmdLine {
         Ok(Action::Draw)
     }
 
-    fn execute(
-        &mut self,
-        cache: &mut Cache,
-        commands: &Commands,
-        state: &mut State,
-        player: &mut Player,
-    ) -> Result<Action, UpdateError> {
+    fn execute(&mut self, ctx: &mut AppContext) -> Result<Action, UpdateError> {
         let value = self.value().trim().to_string();
 
         // Just exit if the value is empty
         if value.is_empty() {
-            self.exit(state);
+            self.exit(ctx);
             return Ok(Action::Draw);
         }
 
         // Execute the command
-        let result = commands.exec(cache, state, player, &value);
+        let result = exec_command(ctx, &value);
 
         // Save the command to the history and remove old duplicate
         if let Some(dup_index) = self.history.iter().position(|i| i.eq(&value)) {
@@ -75,14 +76,14 @@ impl CmdLine {
         }
         self.history.push(value);
 
-        self.exit(state);
+        self.exit(ctx);
         result
     }
-    fn exit(&mut self, state: &mut State) {
+    fn exit(&mut self, ctx: &mut AppContext) {
         self.state.clear();
         self.is_completing = false;
         self.cur_history_item = None;
-        state.enter_mode(crate::app::Mode::Normal);
+        ctx.state.enter_mode(crate::app::Mode::Normal);
     }
 
     fn next_history(&mut self) {
@@ -116,16 +117,10 @@ impl CmdLine {
         self.cur_history_item = Some(cur_item);
     }
 
-    pub fn draw(
-        &self,
-        commands: &Commands,
-        config: &Config,
-        buf: &mut Buffer,
-        rect: Rect,
-    ) -> Rect {
+    pub fn draw(&self, ctx: &AppContext, buf: &mut Buffer, rect: Rect) -> Rect {
         let prompt_rect = rect.with_height(1);
 
-        Clear::new(config.theme.cmdline)
+        Clear::new(ctx.config.theme.cmdline)
             .draw(buf, prompt_rect);
 
         // Draw colon (:)
@@ -133,30 +128,24 @@ impl CmdLine {
 
         // Draw prompt
         Prompt::new(&self.state)
-            .style(config.theme.cmdline)
+            .style(ctx.config.theme.cmdline)
             .draw(buf, prompt_rect.margin_left(1));
 
         // Draw completion
         if self.is_completing {
-            self.draw_completion(commands, config, buf, prompt_rect);
+            self.draw_completion(ctx, buf, prompt_rect);
         }
 
         prompt_rect
     }
-    fn draw_completion(
-        &self,
-        commands: &Commands,
-        config: &Config,
-        buf: &mut Buffer,
-        prompt_rect: Rect,
-    ) {
+    fn draw_completion(&self, ctx: &AppContext, buf: &mut Buffer, prompt_rect: Rect) {
         let value = self.value().trim_start();
         if value.contains(' ') || value.is_empty() {
             return;
         }
 
         let mut compl_height = 0_u16;
-        for (cmd_str, cmd) in &commands.list {
+        for (cmd_str, cmd) in &ctx.commands.list {
             let alias = match cmd {
                 Cmd::Normal(_) => None,
                 Cmd::Alias(_, to) => Some(to)
@@ -183,8 +172,8 @@ impl CmdLine {
             let text_rect = item_rect.margin((1, 0));
 
             let style =
-                if alias.is_some() { config.theme.completion_alias }
-                else { config.theme.completion };
+                if alias.is_some() { ctx.config.theme.completion_alias }
+                else { ctx.config.theme.completion };
 
             Clear::new(style)
                 .draw(buf, item_rect);
