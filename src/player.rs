@@ -231,12 +231,14 @@ impl Player {
         }
     }
 
-    fn update_queue_dur(&mut self) {
+    /// Calculates the entire queue duration
+    fn calculate_queue_dur(&mut self) {
         self.queue_dur = self.queue
             .iter()
             .fold(Duration::default(), |acc, t| acc + t.duration());
     }
-    fn update_elapsed(&mut self) {
+    /// Calculates the duration from the first track in the queue to the current one
+    fn calculate_elapsed(&mut self) {
         if let Some(cur_index) = self.cur_track_index {
             self.elapsed = self.queue[..cur_index]
                 .iter()
@@ -263,7 +265,7 @@ impl Player {
         self.cur_track_index = Some(track_index);
         self.cur_track = Some(Rc::clone(track));
 
-        self.update_elapsed();
+        self.calculate_elapsed();
         Ok(())
     }
     pub fn play_playlist(&mut self, playlist_index: usize, track_index: usize) -> PlaybackResult {
@@ -415,12 +417,12 @@ impl Player {
     /// Add a track to the end of the queue
     pub fn queue_add(&mut self, track: Rc<QueueTrack>) {
         self.queue.push(track);
-        self.update_queue_dur();
+        self.calculate_queue_dur();
     }
     /// Add tracks to the end of the queue
     pub fn queue_add_tracks(&mut self, tracks: Vec<Rc<QueueTrack>>) {
         self.queue.extend(tracks);
-        self.update_queue_dur();
+        self.calculate_queue_dur();
     }
     /// Add playlist to the end of the queue
     pub fn queue_add_playlist(&mut self, playlist_index: usize) -> PlaybackResult {
@@ -454,7 +456,7 @@ impl Player {
     /// Clear and add tracks to the queue
     pub fn queue_set(&mut self, tracks: Vec<Rc<QueueTrack>>) -> PlaybackResult {
         self.queue = tracks;
-        self.update_queue_dur();
+        self.calculate_queue_dur();
         self.stop()
     }
     pub fn queue_set_playlist(&mut self, playlist_index: usize) -> PlaybackResult {
@@ -464,7 +466,7 @@ impl Player {
     /// Clear queue
     pub fn queue_clear(&mut self) -> PlaybackResult {
         self.queue.clear();
-        self.update_queue_dur();
+        self.calculate_queue_dur();
         self.stop()
     }
     /// Randomize the queue order
@@ -474,7 +476,7 @@ impl Player {
         if let Some(cur_track) = &self.cur_track {
             if let Some(new_index) = self.queue.iter().position(|t| t.id == cur_track.id) {
                 self.cur_track_index = Some(new_index);
-                self.update_elapsed();
+                self.calculate_elapsed();
             }
         }
     }
@@ -502,8 +504,8 @@ impl Player {
             }
         }
 
-        self.update_queue_dur();
-        self.update_elapsed();
+        self.calculate_queue_dur();
+        self.calculate_elapsed();
         Ok(())
     }
     /// Move a track in the queue to some position
@@ -522,7 +524,7 @@ impl Player {
             self.cur_track_index = Some(to_index);
         }
 
-        self.update_elapsed();
+        self.calculate_elapsed();
         Ok(())
     }
 }

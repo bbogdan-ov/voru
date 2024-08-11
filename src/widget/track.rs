@@ -75,7 +75,7 @@ impl<'a> TrackWidget<'a> {
             .align(Align::End)
             .draw(buf, index_rect);
         // Draw title
-        let title_text_rect = Text::from(title)
+        Text::from(title)
             .clip(Clip::Ellipsis)
             .draw(buf, title_rect);
         // Draw album

@@ -75,6 +75,7 @@ pub fn playlists_form_config(
 /// Playlist
 #[derive(Debug)]
 pub struct Playlist {
+    #[allow(unused)]
     pub id: Id,
     pub name: String,
     pub tracks: Vec<Rc<Track>>,
