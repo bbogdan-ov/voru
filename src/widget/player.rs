@@ -38,13 +38,15 @@ impl<'a> PlayerWidget<'a> {
 }
 impl<'a> RefDraw for PlayerWidget<'a> {
     fn draw(&self, buf: &mut Buffer, rect: Rect) -> Rect {
+        let theme = &self.ctx.config.theme;
+
         let rect = Self::style_rect(rect, self.style);
 
         let playstate = self.ctx.player.playstate();
         let style = match playstate {
-            PlayState::Stopped => self.ctx.config.theme.player.stopped,
-            PlayState::Playing => self.ctx.config.theme.player.playing,
-            _ => self.ctx.config.theme.player.paused
+            PlayState::Stopped => theme.player_stopped,
+            PlayState::Playing => theme.player_playing,
+            _ => theme.player_paused
         };
 
         match self.style {
@@ -90,7 +92,7 @@ fn draw_info(ctx: &AppContext, style: Style, buf: &mut Buffer, rect: Rect) -> Re
         };
     } else {
         // Draw something else...
-        Text::new("There should be some smart quote... - Unknown man", ctx.config.theme.player.stopped)
+        Text::new("There should be some smart quote... - Unknown man", ctx.config.theme.player_stopped)
             .italic()
             .clip(Clip::Ellipsis)
             .draw(buf, rect);

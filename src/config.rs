@@ -18,72 +18,29 @@ pub enum ConfigError {
 }
 
 // Sections
-/// Config theme item
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ConfigThemeItem {
-    pub normal: Style,
-    pub selected: Style,
-    pub playing: Style,
-    pub selected_playing: Style,
-    pub paused: Style,
-    pub selected_paused: Style,
-}
-impl Default for ConfigThemeItem {
-    fn default() -> Self {
-        Self {
-            normal: Style::default(),
-            selected: Style::cleared().reverse(true),
-            playing: Color::Green.into(),
-            selected_playing: Color::Green.reverse(),
-            paused: Color::Blue.into(),
-            selected_paused: Color::Blue.reverse(),
-        }
-    }
-}
-/// Config theme title
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ConfigThemeTitle {
-    pub active_playing: Style,
-    pub active_paused: Style,
-    pub inactive: Style
-}
-impl Default for ConfigThemeTitle {
-    fn default() -> Self {
-        Self {
-            active_playing: Color::Green.into(),
-            active_paused: Color::Blue.into(),
-            inactive: Color::Gray.into()
-        }
-    }
-}
-/// Config theme player
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ConfigThemePlayer {
-    pub playing: Style,
-    pub paused: Style,
-    pub stopped: Style
-}
-impl Default for ConfigThemePlayer {
-    fn default() -> Self {
-        Self {
-            playing: Color::Green.into(),
-            paused: Color::Blue.into(),
-            stopped: Color::Gray.into(),
-        }
-    }
-}
 /// Config theme
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ConfigTheme {
-    pub title: ConfigThemeTitle,
-    pub player: ConfigThemePlayer,
+    pub title_active_playing: Style,
+    pub title_active_paused: Style,
+    pub title_inactive: Style,
+    pub player_playing: Style,
+    pub player_paused: Style,
+    pub player_stopped: Style,
 
-    pub playlist: ConfigThemeItem,
-    pub track: ConfigThemeItem,
+    pub playlist: Style,
+    pub playlist_selected: Style,
+    pub playlist_playing: Style,
+    pub playlist_selected_playing: Style,
+    pub playlist_paused: Style,
+    pub playlist_selected_paused: Style,
+    pub track: Style,
+    pub track_selected: Style,
+    pub track_playing: Style,
+    pub track_selected_playing: Style,
+    pub track_paused: Style,
+    pub track_selected_paused: Style,
 
     pub notif_normal: Style,
     pub notif_error: Style,
@@ -94,11 +51,25 @@ pub struct ConfigTheme {
 impl Default for ConfigTheme {
     fn default() -> Self {
         Self {
-            title: ConfigThemeTitle::default(),
-            player: ConfigThemePlayer::default(),
+            title_active_playing: Color::Green.into(),
+            title_active_paused: Color::Blue.into(),
+            title_inactive: Color::Gray.into(),
+            player_playing: Color::Green.into(),
+            player_paused: Color::Blue.into(),
+            player_stopped: Color::Gray.into(),
 
-            playlist: ConfigThemeItem::default(),
-            track: ConfigThemeItem::default(),
+            playlist: Style::empty(),
+            playlist_selected: Style::cleared().reverse(true),
+            playlist_playing: Color::Green.into(),
+            playlist_selected_playing: Color::Green.reverse(),
+            playlist_paused: Color::Blue.into(),
+            playlist_selected_paused: Color::Blue.reverse(),
+            track: Style::empty(),
+            track_selected: Style::cleared().reverse(true),
+            track_playing: Color::Green.into(),
+            track_selected_playing: Color::Green.reverse(),
+            track_paused: Color::Blue.into(),
+            track_selected_paused: Color::Blue.reverse(),
 
             notif_normal: Style::cleared().fg(Color::Black).bg(Color::Blue),
             notif_error: Style::cleared().fg(Color::Black).bg(Color::Red),

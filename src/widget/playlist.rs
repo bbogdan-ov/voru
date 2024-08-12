@@ -14,20 +14,22 @@ pub struct PlaylistWidget<'a> {
 }
 impl<'a> RefDraw for PlaylistWidget<'a> {
     fn draw(&self, buf: &mut Buffer, rect: Rect) -> Rect {
+        let theme = &self.ctx.config.theme;
+
         let rect = rect.with_height(1);
 
         let is_cur = self.state.active && self.index == self.state.current();
         let is_paused = self.playing && self.ctx.player.playstate() != PlayState::Playing;
 
         let style =
-            if is_cur && is_paused { self.ctx.config.theme.playlist.selected_paused }
-            else if is_paused { self.ctx.config.theme.playlist.paused }
+            if is_cur && is_paused { theme.playlist_selected_paused }
+            else if is_paused { theme.playlist_paused }
 
-            else if is_cur && self.playing { self.ctx.config.theme.playlist.selected_playing }
-            else if self.playing { self.ctx.config.theme.playlist.playing }
+            else if is_cur && self.playing { theme.playlist_selected_playing }
+            else if self.playing { theme.playlist_playing }
 
-            else if is_cur { self.ctx.config.theme.playlist.selected }
-            else { self.ctx.config.theme.playlist.normal };
+            else if is_cur { theme.playlist_selected }
+            else { theme.playlist };
 
         Clear::new(style)
             .draw(buf, rect);

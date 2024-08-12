@@ -37,9 +37,9 @@ impl<'a> Draw for ViewWidget<'a> {
     fn draw(self, buf: &mut Buffer, rect: Rect) -> Rect {
         let is_playing = self.playstate == PlayState::Playing;
         let title_style =
-            if self.active && is_playing { self.config.theme.title.active_playing }
-            else if self.active && !is_playing { self.config.theme.title.active_paused }
-            else { self.config.theme.title.inactive };
+            if self.active && is_playing { self.config.theme.title_active_playing }
+            else if self.active && !is_playing { self.config.theme.title_active_paused }
+            else { self.config.theme.title_inactive };
 
         let header_rect = rect.margin((1, 0)).with_height(1);
 
