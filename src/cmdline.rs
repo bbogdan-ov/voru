@@ -145,13 +145,15 @@ impl CmdLine {
         }
 
         let mut compl_height = 0_u16;
-        for (cmd_str, cmd) in &ctx.commands.list {
+        for cmd in &ctx.commands.list {
             let alias = match cmd {
-                Cmd::Normal(_) => None,
-                Cmd::Alias(_, to) => Some(to)
+                Cmd::Normal(_, _) => None,
+                Cmd::Alias(_, _, to) => Some(to)
             };
 
-            if !cmd_str.contains(value) && !alias.is_some_and(|a| a.contains(value)) {
+            let name = cmd.name();
+
+            if !name.contains(value) && !alias.is_some_and(|a| a.contains(value)) {
                 continue;
             }
 
@@ -159,8 +161,8 @@ impl CmdLine {
             let args = kind.args();
 
             let name = match args {
-                Some(args) => format!("{} {}", cmd_str, args),
-                None => cmd_str.to_string()
+                Some(args) => format!("{} {}", name, args),
+                None => name.to_string()
             };
             let desc = kind.description();
             let desc = match alias {

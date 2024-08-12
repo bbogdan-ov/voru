@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, rc::Rc, time::Duration};
+use std::{path::PathBuf, rc::Rc, time::Duration};
 
 use thiserror::Error;
 
@@ -97,71 +97,75 @@ impl CmdKind {
 /// Command
 #[derive(Debug)]
 pub enum Cmd {
-    Normal(CmdKind),
-    Alias(CmdKind, &'static str)
+    Normal(&'static str, CmdKind),
+    Alias(&'static str, CmdKind, &'static str)
 }
 impl Cmd {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Normal(name, _) => name,
+            Self::Alias(name, _, _) => name
+        }
+    }
     pub fn kind(&self) -> &CmdKind {
         match self {
-            Self::Normal(kind) => kind,
-            Self::Alias(kind, _) => kind
+            Self::Normal(_, kind) => kind,
+            Self::Alias(_, kind, _) => kind
         }
     }
     pub fn is_alias(&self) -> bool {
-        matches!(self, Self::Alias(_, _))
+        matches!(self, Self::Alias(_, _, _))
     }
 }
 
 /// Commands
 #[derive(Debug)]
 pub struct Commands {
-    pub list: HashMap<&'static str, Cmd>,
+    pub list: [Cmd; 37]
 }
 impl Commands {
     pub fn new() -> Self {
-        let list = HashMap::from([
-            ("quit",          Cmd::Normal(CmdKind::Quit)),
-            ("q",             Cmd::Alias(CmdKind::Quit, "quit")),
-            ("bye",           Cmd::Alias(CmdKind::Quit, "quit")),
-            ("hello",         Cmd::Normal(CmdKind::Hello)),
-            ("echo",          Cmd::Normal(CmdKind::Echo)),
+        Self { list: [
+            Cmd::Normal("quit", CmdKind::Quit),
+            Cmd::Alias("q", CmdKind::Quit, "quit"),
+            Cmd::Alias("bye", CmdKind::Quit, "quit"),
+            Cmd::Normal("hello", CmdKind::Hello),
+            Cmd::Normal("echo", CmdKind::Echo),
 
-            ("play-next",     Cmd::Normal(CmdKind::PlayNext)),
-            ("next",          Cmd::Alias(CmdKind::PlayNext, "play-next")),
-            ("play-prev",     Cmd::Normal(CmdKind::PlayPrev)),
-            ("prev",          Cmd::Alias(CmdKind::PlayPrev, "play-prev")),
-            ("replay",        Cmd::Normal(CmdKind::Replay)),
-            ("resume",        Cmd::Normal(CmdKind::Resume)),
-            ("pause",         Cmd::Normal(CmdKind::Pause)),
-            ("stop",          Cmd::Normal(CmdKind::Stop)),
-            ("toggle",        Cmd::Normal(CmdKind::Toggle)),
-            ("seek",          Cmd::Normal(CmdKind::Seek)),
-            ("seek-forw",     Cmd::Normal(CmdKind::SeekForward)),
-            ("seekf",         Cmd::Alias(CmdKind::SeekForward, "seek-forw")),
-            ("seek-back",     Cmd::Normal(CmdKind::SeekBackward)),
-            ("seekb",         Cmd::Alias(CmdKind::SeekBackward, "seek-back")),
-            ("volume",        Cmd::Normal(CmdKind::Volume)),
-            ("vol",           Cmd::Alias(CmdKind::Volume, "volume")),
-            ("volume-up",     Cmd::Normal(CmdKind::VolumeUp)),
-            ("volup",         Cmd::Alias(CmdKind::VolumeUp, "volume-up")),
-            ("volume-down",   Cmd::Normal(CmdKind::VolumeDown)),
-            ("voldown",       Cmd::Alias(CmdKind::VolumeDown, "volume-down")),
-            ("volume-reset",  Cmd::Normal(CmdKind::VolumeReset)),
-            ("volreset",      Cmd::Alias(CmdKind::VolumeReset, "volume-reset")),
-            ("mute",          Cmd::Normal(CmdKind::Mute)),
-            ("unmute",        Cmd::Normal(CmdKind::Unmute)),
-            ("mute-toggle",   Cmd::Normal(CmdKind::MuteToggle)),
-            ("mutetog",       Cmd::Alias(CmdKind::MuteToggle, "mute-toggle")),
+            Cmd::Normal("play-next", CmdKind::PlayNext),
+            Cmd::Alias("next", CmdKind::PlayNext, "play-next"),
+            Cmd::Normal("play-prev", CmdKind::PlayPrev),
+            Cmd::Alias("prev", CmdKind::PlayPrev, "play-prev"),
+            Cmd::Normal("replay", CmdKind::Replay),
+            Cmd::Normal("resume", CmdKind::Resume),
+            Cmd::Normal("pause", CmdKind::Pause),
+            Cmd::Normal("stop", CmdKind::Stop),
+            Cmd::Normal("toggle", CmdKind::Toggle),
+            Cmd::Normal("seek", CmdKind::Seek),
+            Cmd::Normal("seek-forw", CmdKind::SeekForward),
+            Cmd::Alias("seekf", CmdKind::SeekForward, "seek-forw"),
+            Cmd::Normal("seek-back", CmdKind::SeekBackward),
+            Cmd::Alias("seekb", CmdKind::SeekBackward, "seek-back"),
+            Cmd::Normal("volume", CmdKind::Volume),
+            Cmd::Alias("vol", CmdKind::Volume, "volume"),
+            Cmd::Normal("volume-up", CmdKind::VolumeUp),
+            Cmd::Alias("volup", CmdKind::VolumeUp, "volume-up"),
+            Cmd::Normal("volume-down", CmdKind::VolumeDown),
+            Cmd::Alias("voldown", CmdKind::VolumeDown, "volume-down"),
+            Cmd::Normal("volume-reset", CmdKind::VolumeReset),
+            Cmd::Alias("volreset", CmdKind::VolumeReset, "volume-reset"),
+            Cmd::Normal("mute", CmdKind::Mute),
+            Cmd::Normal("unmute", CmdKind::Unmute),
+            Cmd::Normal("mute-toggle", CmdKind::MuteToggle),
+            Cmd::Alias("mutetog", CmdKind::MuteToggle, "mute-toggle"),
 
-            ("queue-add",     Cmd::Normal(CmdKind::QueueAdd)),
-            ("add",           Cmd::Alias(CmdKind::QueueAdd, "queue-add")),
-            ("queue-clear",   Cmd::Normal(CmdKind::QueueClear)),
-            ("clear",         Cmd::Alias(CmdKind::QueueClear, "queue-clear")),
-            ("queue-shuffle", Cmd::Normal(CmdKind::QueueShuffle)),
-            ("shuffle",       Cmd::Alias(CmdKind::QueueShuffle, "queue-shuffle")),
-        ]);
-
-        Self { list }
+            Cmd::Normal("queue-add", CmdKind::QueueAdd),
+            Cmd::Alias("add", CmdKind::QueueAdd, "queue-add"),
+            Cmd::Normal("queue-clear", CmdKind::QueueClear),
+            Cmd::Alias("clear", CmdKind::QueueClear, "queue-clear"),
+            Cmd::Normal("queue-shuffle", CmdKind::QueueShuffle),
+            Cmd::Alias("shuffle", CmdKind::QueueShuffle, "queue-shuffle"),
+        ] }
     }
 
     /// Returns formatted list of the commands:
@@ -169,18 +173,19 @@ impl Commands {
     pub fn formatted_list(&self) -> Vec<(bool, String, String)> {
         let mut result = vec![];
 
-        for (cmd_str, cmd) in &self.list {
+        for cmd in &self.list {
             let alias = match cmd {
-                Cmd::Normal(_) => None,
-                Cmd::Alias(_, to) => Some(to)
+                Cmd::Normal(_, _) => None,
+                Cmd::Alias(_, _, to) => Some(to)
             };
 
+            let name = cmd.name();
             let kind = cmd.kind();
             let args = kind.args();
 
             let name = match args {
-                Some(args) => format!("{} {}", cmd_str, args),
-                None => cmd_str.to_string()
+                Some(args) => format!("{} {}", name, args),
+                None => name.to_string()
             };
             let desc = kind.description();
             let desc = match alias {
@@ -193,13 +198,20 @@ impl Commands {
 
         result
     }
+
+    pub fn find<S: AsRef<str>>(&self, name: S) -> Option<&Cmd> {
+        let index = self.list
+            .iter()
+            .position(|c| c.name().eq(name.as_ref()))?;
+        Some(&self.list[index])
+    }
 }
 
 /// Execute command with args by given string
 /// For example: `"queue-add ~/my-cool-music-dir/*"`
 pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<Action, UpdateError> {
     let command = command.as_ref().trim();
-    let (cmd_str, args_str) = match command.split_once(' ') {
+    let (cmd_name, args_str) = match command.split_once(' ') {
         Some((cmd, args)) => (cmd, args.trim()),
         None => (command, "")
     };
@@ -210,7 +222,7 @@ pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<A
 
     let first_arg = args.first();
 
-    let cmd = ctx.commands.list.get(cmd_str)
+    let cmd = ctx.commands.find(cmd_name)
         .ok_or(CmdError::NoSuchCmd)?;
 
     match cmd.kind() {
