@@ -10,11 +10,13 @@ mod view;
 mod widget;
 mod cmdline;
 mod commands;
+mod cli;
 
 use std::{io::{self, Read}, ops::BitOr, sync::mpsc, thread};
 
 use app::{App, AppContext, Mode, State, View};
 use cache::Cache;
+use cli::{print_help, print_version, Cli};
 use commands::Commands;
 use config::{default_config_path, Config, ConfigError};
 use player::Player;
@@ -86,24 +88,44 @@ impl From<ListEvent> for Action {
     }
 }
 
-fn main() {
-    match run() {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(1);
-        }
-    }
+fn main() -> Result<(), AppError> {
+    run()
+    //match run() {
+    //    Ok(_) => (),
+    //    Err(e) => {
+    //        eprintln!("{}", e);
+    //        std::process::exit(1);
+    //    }
+    //}
 }
 fn run() -> Result<(), AppError> {
+    // Init commands
     let commands = Commands::new();
 
+    // Parse args
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let Some(cli) = Cli::parse(&args) else {
+        // Print help message and exit if an unknown arg was given
+        print_help(&commands);
+        std::process::exit(1);
+    };
+
+    if cli.print_help {
+        // Print help message and exit
+        print_help(&commands);
+        return Ok(())
+    } else if cli.print_version {
+        // Print current version and exit
+        print_version();
+        return Ok(())
+    }
+
     // Trying to load a config
-    let config_path = default_config_path().map_err(AppError::Config)?;
+    let config_path = cli.config_path.unwrap_or(default_config_path().map_err(AppError::Config)?);
     let config = match Config::from_path(&config_path) {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Unable to load the config at {:?}:", config_path);
+            eprintln!("Unable to load the config {:?}:", config_path);
             eprintln!("{}\n", e);
             eprintln!("Press <Enter> to continue with the default config...");
             let _ = io::stdin().read(&mut []);

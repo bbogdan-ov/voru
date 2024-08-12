@@ -163,6 +163,36 @@ impl Commands {
 
         Self { list }
     }
+
+    /// Returns formatted list of the commands:
+    /// `(is_alias, "command <ARGS>", "(alias to :command) Command description")`
+    pub fn formatted_list(&self) -> Vec<(bool, String, String)> {
+        let mut result = vec![];
+
+        for (cmd_str, cmd) in &self.list {
+            let alias = match cmd {
+                Cmd::Normal(_) => None,
+                Cmd::Alias(_, to) => Some(to)
+            };
+
+            let kind = cmd.kind();
+            let args = kind.args();
+
+            let name = match args {
+                Some(args) => format!("{} {}", cmd_str, args),
+                None => cmd_str.to_string()
+            };
+            let desc = kind.description();
+            let desc = match alias {
+                Some(alias) => format!("(alias to :{alias}) {desc}"),
+                None => desc.to_string()
+            };
+
+            result.push((alias.is_some(), name, desc));
+        }
+
+        result
+    }
 }
 
 /// Execute command with args by given string
