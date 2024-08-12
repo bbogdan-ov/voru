@@ -40,10 +40,10 @@ pub fn print_help(commands: &Commands) {
     println!();
     println!("EXAMPLES:");
     println!("    Launch VORU with a welcome message!");
-    println!("        voru --echo \"HELLO!!!\"");
+    println!("        voru --echo 'HELLO!!!'");
     println!();
     println!("    Shuffle the queue and send a message:");
-    println!("        voru --echo \"Queue shuffled!\" queue-shuffle");
+    println!("        voru --echo 'Queue shuffled!' queue-shuffle");
     println!();
     println!("    Add tracks to the queue:");
     println!("        voru add ~/my-cool-music/*");
