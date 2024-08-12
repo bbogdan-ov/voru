@@ -108,10 +108,7 @@ impl Cmd {
         }
     }
     pub fn is_alias(&self) -> bool {
-        match self {
-            Self::Alias(_, _) => true,
-            _ => false
-        }
+        matches!(self, Self::Alias(_, _))
     }
 }
 
@@ -181,7 +178,7 @@ pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<A
         .filter(|a| !a.is_empty())
         .collect();
 
-    let first_arg = args.get(0);
+    let first_arg = args.first();
 
     let cmd = ctx.commands.list.get(cmd_str)
         .ok_or(CmdError::NoSuchCmd)?;
@@ -198,7 +195,7 @@ pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<A
         CmdKind::Pause => ctx.player.pause()?,
         CmdKind::Stop => ctx.player.stop()?,
         CmdKind::Toggle => ctx.player.toggle()?,
-        CmdKind::Seek => ctx.player.seek(parse_secs(args.get(0))?)?,
+        CmdKind::Seek => ctx.player.seek(parse_secs(args.first())?)?,
         CmdKind::SeekForward => ctx.player.seek_forward(parse_secs(first_arg)?)?,
         CmdKind::SeekBackward => ctx.player.seek_backward(parse_secs(first_arg)?)?,
         CmdKind::Volume => ctx.player.set_volume(parse_percent(first_arg)?)?,

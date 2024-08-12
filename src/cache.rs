@@ -23,7 +23,7 @@ impl Cache {
     }
     pub fn add<P: AsRef<Path>, T: Into<Rc<TrackData>>>(&mut self, path: P, track_data: T) {
         let path = path.as_ref();
-        if !self.has(&path) {
+        if !self.has(path) {
             self.tracks_data.insert(path.into(), track_data.into());
         }
     }

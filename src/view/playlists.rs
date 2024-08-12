@@ -115,7 +115,7 @@ impl PlaylistsView {
             let tracks_count = playlist.tracks.len();
             let desc = format!("{} tracks  {}", tracks_count, playlist.duration.to_readable());
 
-            let tracks_rect = ViewWidget::new(&ctx.config, playstate, format!("{}", playlist.name))
+            let tracks_rect = ViewWidget::new(&ctx.config, playstate, &playlist.name)
                 .with_desc(desc)
                 .with_active(self.tracks_state.active)
                 .draw(buf, rects[1]);

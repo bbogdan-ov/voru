@@ -51,11 +51,11 @@ impl<'a> RefDraw for PlayerWidget<'a> {
 
         match self.style {
             PlayerStyle::Classic |
-            PlayerStyle::ClassicReverse => draw_classic(self, &self.ctx, style, buf, rect),
+            PlayerStyle::ClassicReverse => draw_classic(self, self.ctx, style, buf, rect),
 
-            PlayerStyle::Progress => draw_progress(&self.ctx, style, buf, rect),
+            PlayerStyle::Progress => draw_progress(self.ctx, style, buf, rect),
 
-            PlayerStyle::Text => draw_info(&self.ctx, style, buf, rect),
+            PlayerStyle::Text => draw_info(self.ctx, style, buf, rect),
         }
     }
 }

@@ -198,7 +198,7 @@ fn draw(
 
     term.clear();
     app.draw(
-        &ctx,
+        ctx,
         &mut term.buffer,
         rect,
     );
