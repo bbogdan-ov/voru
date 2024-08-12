@@ -89,16 +89,6 @@ impl From<ListEvent> for Action {
 }
 
 fn main() -> Result<(), AppError> {
-    run()
-    //match run() {
-    //    Ok(_) => (),
-    //    Err(e) => {
-    //        eprintln!("{}", e);
-    //        std::process::exit(1);
-    //    }
-    //}
-}
-fn run() -> Result<(), AppError> {
     // Init commands
     let commands = Commands::new();
 
