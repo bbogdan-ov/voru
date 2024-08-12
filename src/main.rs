@@ -137,11 +137,16 @@ fn main() -> Result<(), AppError> {
     let player = Player::new(stream_handle, playlists);
 
     // Init state
-    let state = State {
+    let mut state = State {
         mode: Mode::Normal,
         view: View::default(),
         notif: None
     };
+
+    // Echo on startup
+    if let Some(echo_msg) = cli.echo_msg {
+        state.notify(echo_msg);
+    }
 
     // Init app context
     let mut ctx = AppContext {
