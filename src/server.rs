@@ -151,9 +151,7 @@ impl mpris::PlayerInterface for Server {
         Ok(())
     }
     async fn volume(&self) -> fdo::Result<mpris::Volume> {
-        //Ok(self.state.try_lock()
-        //    .map_or(1.0, |s| s.volume as f64))
-        Ok(self.state.try_lock().unwrap().volume as f64)
+        Ok(self.state.lock().unwrap().volume as f64)
     }
     async fn set_position(&self, _track_id: mpris::TrackId, _position: mpris_server::Time) -> fdo::Result<()> {
         // TODO:
@@ -161,6 +159,5 @@ impl mpris::PlayerInterface for Server {
     }
     async fn position(&self) -> fdo::Result<mpris::Time> {
         Ok(self.state.lock().unwrap().pos)
-            //.map_or(mpris::Time::default(), |s| s.pos))
     }
 }
