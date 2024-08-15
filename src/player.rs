@@ -6,17 +6,17 @@ use std::{
     ops::Deref,
     path::Path,
     rc::Rc,
-    sync::Arc,
+    sync::{mpsc, Arc, Mutex},
     time::Duration,
 };
+
+use mpris_server::{self as mpris, zbus::zvariant::ObjectPath};
 
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use thiserror::Error;
 
 use crate::{
-    playlist::Playlist,
-    track::{Id, Track},
-    traits::{MoveTo, Shuffle},
+    playlist::Playlist, server::Server, track::{Id, Track}, traits::{MoveTo, Shuffle}, AppError, UpdateKind
 };
 
 // Consts
@@ -175,6 +175,16 @@ impl Deref for QueueTrack {
     }
 }
 
+/// Player state
+#[derive(Debug, Clone)]
+pub struct PlayerState {
+    pub metadata: mpris::Metadata,
+
+    pub status: mpris::PlaybackStatus,
+    pub pos: mpris::Time,
+    pub volume: f32,
+}
+
 /// Player
 pub struct Player {
     playback: Playback,
@@ -188,10 +198,17 @@ pub struct Player {
     pub cur_track: Option<Rc<QueueTrack>>,
 
     volume: f32,
-    muted: bool
+    muted: bool,
+    
+    pub server: mpris::Server<Server>,
+    pub state: Arc<Mutex<PlayerState>>
 }
 impl Player {
-    pub fn new(stream_handle: OutputStreamHandle, mut playlists: Vec<Rc<RefCell<Playlist>>>) -> Self {
+    pub async fn new(
+        stream_handle: OutputStreamHandle,
+        mut playlists: Vec<Rc<RefCell<Playlist>>>,
+        sender: mpsc::Sender<UpdateKind>,
+    ) -> Result<Self, AppError> {
         // Collect all the tracks from the playlists and put them into the * playlist
         let mut all_tracks = vec![];
         for playlist in &playlists {
@@ -200,7 +217,29 @@ impl Player {
         }
         playlists.insert(0, Rc::new(RefCell::new(Playlist::new("*", all_tracks))));
 
-        Self {
+        let state = Arc::new(Mutex::new(PlayerState {
+            metadata: mpris::Metadata::default(),
+
+            status: mpris::PlaybackStatus::Stopped,
+            pos: mpris::Time::default(),
+            volume: 1.0
+        }));
+
+        // Init server
+        let server = mpris_server::Server::new("voru", Server {
+            state: Arc::clone(&state),
+            sender: sender.clone()
+        }).await
+            .map_err(AppError::Zbus)?;
+
+        // Send some event just to let mpris know about the server
+        server
+            .properties_changed([
+                mpris_server::Property::CanRaise(true)
+            ]).await
+            .map_err(AppError::Zbus)?;
+
+        Ok(Self {
             playback: Playback {
                 stream_handle,
                 sink: None,
@@ -216,11 +255,38 @@ impl Player {
             cur_track: None,
 
             volume: 1.0,
-            muted: false
-        }
+            muted: false,
+
+            server,
+            state
+        })
     }
 
     pub fn handle_tick(&mut self) {
+        if let Ok(mut state) = self.state.try_lock() {
+            let status = match self.playstate() {
+                PlayState::Playing => mpris::PlaybackStatus::Playing,
+                PlayState::Paused => mpris::PlaybackStatus::Paused,
+                PlayState::Stopped => mpris::PlaybackStatus::Stopped,
+                PlayState::Ended => mpris::PlaybackStatus::Stopped
+            };
+            let pos = mpris::Time::from_micros(self.pos().as_micros() as i64);
+
+            if state.pos.ne(&pos) {
+                async_std::task::block_on(self.server.emit(
+                    mpris::Signal::Seeked { position: pos }
+                )).unwrap();
+            }
+            if state.status.ne(&status) {
+                async_std::task::block_on(self.server.properties_changed([
+                    mpris::Property::PlaybackStatus(status),
+                ])).unwrap();
+            }
+            
+            state.status = status;
+            state.pos = pos;
+        }
+
         if self.cur_track.is_some() {
             let playstate = self.playstate();
 
@@ -265,6 +331,25 @@ impl Player {
         self.cur_track_index = Some(track_index);
         self.cur_track = Some(Rc::clone(track));
 
+        if let Ok(mut state) = self.state.try_lock() {
+            let len = track.try_duration()
+                .map(|d| mpris_server::Time::from_micros(d.as_micros() as i64));
+
+            state.metadata.set_trackid(ObjectPath::try_from(format!("/org/mpris/MediaPlayer2/voru/{}", track.id.deref())).ok());
+            state.metadata.set_art_url(Some("file:///home/bogdanov/.mozilla/firefox/firefox-mpris/12864_14.png"));
+            state.metadata.set_title(track.title().into());
+            state.metadata.set_album(track.try_album());
+            state.metadata.set_length(len);
+            
+            if let Some(artist) = track.try_artist() {
+                state.metadata.set_artist(Some([ artist ]));
+            }
+
+            async_std::task::block_on(self.server.properties_changed([
+                mpris::Property::Metadata(state.metadata.clone()),
+            ])).unwrap();
+        }
+
         self.calculate_elapsed();
         Ok(())
     }
@@ -307,7 +392,8 @@ impl Player {
         Ok(())
     }
     pub fn pause(&mut self) -> PlaybackResult {
-        self.playback.pause()
+        self.playback.pause()?;
+        Ok(())
     }
     pub fn stop(&mut self) -> PlaybackResult {
         self.cur_track = None;
@@ -335,8 +421,10 @@ impl Player {
         self.volume = volume.clamp(0.0, MAX_VOLUME);
 
         if self.muted {
+            self.state.lock().unwrap().volume = 0.0;
             self.playback.set_volume(0.0)
         } else {
+            self.state.lock().unwrap().volume = self.volume;
             self.playback.set_volume(self.volume)
         }
     }

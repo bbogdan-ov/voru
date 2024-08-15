@@ -1,4 +1,4 @@
-use std::{io, time::Duration as Dur};
+use std::{cmp::Ordering, io, time::Duration as Dur};
 
 use thiserror::Error;
 use tuich::{
@@ -16,6 +16,7 @@ use crate::{
     config::Config,
     match_keys,
     player::{PlaybackError, Player},
+    server::ServerAction,
     view::{PlayerView, PlaylistsView, QueueView},
     widget::PlayerWidget,
     Action,
@@ -151,13 +152,7 @@ impl App {
         }
     }
 
-    pub fn handle_key(
-        &mut self,
-        ctx: &mut AppContext,
-        key: Key,
-    ) -> Action {
-        let result = self.try_handle_key(ctx, key);
-
+    fn catch_error(&self, ctx: &mut AppContext, result: Result<Action, UpdateError>) -> Action {
         match result {
             Ok(action) => action,
             Err(e) => {
@@ -190,11 +185,16 @@ impl App {
             }
         }
     }
-    fn try_handle_key(
+
+    pub fn handle_key(
         &mut self,
         ctx: &mut AppContext,
         key: Key,
-    ) -> Result<Action, UpdateError> {
+    ) -> Action {
+        let result = self.try_handle_key(ctx, key);
+        self.catch_error(ctx, result)
+    }
+    fn try_handle_key(&mut self, ctx: &mut AppContext, key: Key) -> Result<Action, UpdateError> {
         let action = if ctx.state.notif.is_some() {
             ctx.state.notif = None;
             Action::Draw
@@ -247,6 +247,44 @@ impl App {
                     View::Player => Action::Nope
                 })
             }
+        }
+
+        Ok(Action::Draw)
+    }
+
+    pub fn handle_server_action(
+        &mut self,
+        ctx: &mut AppContext,
+        action: ServerAction,
+    ) -> Action {
+        let result = self.try_handle_server_action(ctx, action);
+        self.catch_error(ctx, result)
+    }
+    fn try_handle_server_action(
+        &mut self,
+        ctx: &mut AppContext,
+        action: ServerAction,
+    ) -> Result<Action, UpdateError> {
+        match action {
+            ServerAction::Play => ctx.player.resume()?,
+            ServerAction::Pause => ctx.player.pause()?,
+            ServerAction::Stop => ctx.player.stop()?,
+            ServerAction::PlayPause => ctx.player.toggle()?,
+            ServerAction::Seek(offset) => {
+                let micros = offset.as_micros();
+                let dur = Dur::from_micros(micros.unsigned_abs());
+
+                match micros.cmp(&0) {
+                    Ordering::Greater => ctx.player.seek_forward(dur)?,
+                    Ordering::Less => ctx.player.seek_backward(dur)?,
+                    Ordering::Equal => return Ok(Action::Nope)
+                }
+            }
+            ServerAction::Volume(vol) => ctx.player.set_volume(vol)?,
+
+            ServerAction::Next => ctx.player.play_next()?,
+            ServerAction::Prev => ctx.player.play_prev()?,
+            ServerAction::Shuffle => ctx.player.queue_shuffle()
         }
 
         Ok(Action::Draw)
@@ -312,11 +350,7 @@ impl App {
 
         // Draw command line at the top
         if ctx.state.mode == Mode::Cmd {
-            self.cmdline.draw(
-                ctx,
-                buf,
-                rect,
-            );
+            self.cmdline.draw(ctx, buf, rect);
         }
 
         rect

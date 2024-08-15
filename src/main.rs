@@ -11,6 +11,7 @@ mod widget;
 mod cmdline;
 mod commands;
 mod cli;
+mod server;
 
 use std::{io::{self, Read}, ops::BitOr, sync::mpsc, thread};
 
@@ -22,6 +23,7 @@ use config::{default_config_path, Config, ConfigError};
 use player::Player;
 use playlist::{playlists_form_config, LoadPlaylistsError};
 use rodio::OutputStream;
+use server::ServerAction;
 use thiserror::Error;
 use tuich::{backend::{crossterm::CrosstermBackend, BackendEvent, BackendEventReader}, event::Event, terminal::Terminal};
 use widget::ListEvent;
@@ -39,6 +41,8 @@ enum AppError {
     LoadPlaylists(LoadPlaylistsError),
     #[error("Audio stream error: {0}")]
     AudioStream(rodio::StreamError),
+    #[error("Zbus error: {0}")]
+    Zbus(mpris_server::zbus::Error)
 }
 impl From<io::Error> for AppError {
     fn from(value: io::Error) -> Self {
@@ -58,10 +62,11 @@ const TICK_INTERVAL: u64 = 500;
 pub type Term = Terminal<CrosstermBackend<io::Stdout>>;
 
 /// Update kind
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 enum UpdateKind {
     Tick,
-    Event(Event)
+    Event(Event),
+    Server(ServerAction)
 }
 
 /// App action
@@ -88,7 +93,18 @@ impl From<ListEvent> for Action {
     }
 }
 
-fn main() -> Result<(), AppError> {
+#[async_std::main]
+async fn main() -> Result<(), AppError> {
+    // Set panic hook
+    std::panic::set_hook(Box::new(|msg| {
+        let mut stdout = io::stdout();
+
+        crossterm::terminal::disable_raw_mode().unwrap();
+        crossterm::execute!(stdout, crossterm::terminal::LeaveAlternateScreen).unwrap();
+        crossterm::execute!(stdout, crossterm::cursor::MoveTo(0, 0)).unwrap();
+        eprintln!("VORU panicked: {}", msg);
+    }));
+
     // Init commands
     let commands = Commands::new();
 
@@ -124,6 +140,8 @@ fn main() -> Result<(), AppError> {
         }
     };
 
+    let (sender, receiver) = mpsc::channel::<UpdateKind>();
+
     // Init audio stream
     let (_stream, stream_handle) = OutputStream::try_default()
         .map_err(AppError::AudioStream)?;
@@ -134,7 +152,7 @@ fn main() -> Result<(), AppError> {
     // Load playlists
     let playlists = playlists_form_config(&mut cache, &config)
         .map_err(AppError::LoadPlaylists)?;
-    let player = Player::new(stream_handle, playlists);
+    let player = Player::new(stream_handle, playlists, sender.clone()).await?;
 
     // Init state
     let mut state = State {
@@ -162,24 +180,18 @@ fn main() -> Result<(), AppError> {
     // Init app
     let mut app = App::new();
 
-    let (sender, receiver) = mpsc::channel::<UpdateKind>();
-
     // Handle events
     handle_events(&term, sender.clone());
     handle_tick(sender.clone());
 
-    draw(
-        &ctx,
-        &mut term,
-        &mut app,
-    )?;
+    draw(&ctx, &mut term, &mut app)?;
 
     loop {
         let action = match receiver.recv() {
             Ok(UpdateKind::Tick) => {
                 ctx.player.handle_tick();
                 Action::Draw
-            },
+            }
             Ok(UpdateKind::Event(event)) => {
                 match event {
                     Event::Key(key, _) => {
@@ -188,7 +200,8 @@ fn main() -> Result<(), AppError> {
                     Event::Resize(w, h) => Action::Resize(w, h),
                     _ => Action::Nope
                 }
-            },
+            }
+            Ok(UpdateKind::Server(action)) => app.handle_server_action(&mut ctx, action),
             Err(_) => Action::Nope
         };
 
@@ -199,18 +212,10 @@ fn main() -> Result<(), AppError> {
             Action::Quit => break Ok(())
         }
 
-        draw(
-            &ctx,
-            &mut term,
-            &mut app,
-        )?;
+        draw(&ctx, &mut term, &mut app)?;
     }
 }
-fn draw(
-    ctx: &AppContext,
-    term: &mut Term,
-    app: &mut App,
-) -> io::Result<()> {
+fn draw(ctx: &AppContext, term: &mut Term, app: &mut App) -> io::Result<()> {
     let rect = term.rect();
 
     term.clear();
