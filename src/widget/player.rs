@@ -70,11 +70,13 @@ fn draw_info(ctx: &AppContext, style: Style, buf: &mut Buffer, rect: Rect) -> Re
         let volume =
             if ctx.player.muted() { "muted".to_string() }
             else { format!("{}%", (ctx.player.volume() * 100.0).round()) };
+        let loopstate = ctx.player.loopstate().to_string();
         let pos = ctx.player.pos();
         let dur = ctx.player.duration();
 
         // Draw play info
-        let play_info_rect = Text::new(format!("{} / {}  {}", pos.to_readable(), dur.to_readable(), volume), style)
+        let play_info = format!("{} / {}  {}  {}", pos.to_readable(), dur.to_readable(), loopstate, volume);
+        let play_info_rect = Text::new(play_info, style)
             .align(Align::End)
             .draw(buf, rect);
 

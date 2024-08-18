@@ -188,6 +188,7 @@ pub struct ConfigKeys {
     pub mute: Option<Keymap>,
     pub unmute: Option<Keymap>,
     pub mute_toggle: Option<Keymap>,
+    pub cycle_loopstate: Option<Keymap>
 }
 impl Default for ConfigKeys {
     fn default() -> Self {
@@ -242,6 +243,7 @@ impl Default for ConfigKeys {
             mute: None,
             unmute: None,
             mute_toggle: vec![ key!('m') ].into(),
+            cycle_loopstate: vec![ key!('o') ].into(),
         }
     }
 }

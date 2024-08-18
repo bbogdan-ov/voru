@@ -3,7 +3,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use mpris_server as mpris;
 use mpris::zbus::{self, fdo};
 
-use crate::{player::PlayerState, UpdateKind};
+use crate::{player::{LoopState, PlayerState}, UpdateKind};
 
 /// Server action
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -14,6 +14,7 @@ pub enum ServerAction {
     PlayPause,
     Seek(mpris::Time),
     Volume(f32),
+    Loop(LoopState),
 
     Next,
     Prev,
@@ -97,7 +98,7 @@ impl mpris::PlayerInterface for Server {
 
     async fn playback_status(&self) -> fdo::Result<mpris::PlaybackStatus> {
         Ok(self.state.lock().unwrap()
-            .status)
+            .playstatus)
     }
     async fn metadata(&self) -> fdo::Result<mpris::Metadata> {
         Ok(self.state.lock().unwrap()
@@ -122,13 +123,18 @@ impl mpris::PlayerInterface for Server {
     async fn minimum_rate(&self) -> fdo::Result<mpris::PlaybackRate> { Ok(1.0) }
     async fn maximum_rate(&self) -> fdo::Result<mpris::PlaybackRate> { Ok(1.0) }
 
-    async fn set_loop_status(&self, _loop_status: mpris::LoopStatus) -> zbus::Result<()> {
-        // TODO:
+    async fn set_loop_status(&self, loopstatus: mpris::LoopStatus) -> zbus::Result<()> {
+        let loopstate = match loopstatus {
+            mpris::LoopStatus::None => LoopState::None,
+            mpris::LoopStatus::Playlist => LoopState::Queue,
+            mpris::LoopStatus::Track => LoopState::Queue,
+        };
+        self.send(ServerAction::Loop(loopstate))?;
         Ok(())
     }
     async fn loop_status(&self) -> fdo::Result<mpris::LoopStatus> {
-        // TODO:
-        Ok(mpris::LoopStatus::None)
+        Ok(self.state.lock().unwrap()
+            .loopstatus)
     }
     async fn set_rate(&self, _rate: mpris::PlaybackRate) -> zbus::Result<()> {
         Ok(())

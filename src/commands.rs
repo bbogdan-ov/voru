@@ -2,7 +2,7 @@ use std::{path::PathBuf, rc::Rc, time::Duration};
 
 use thiserror::Error;
 
-use crate::{app::{AppContext, UpdateError}, player::QueueTrack, track::Track, traits::Expand, Action};
+use crate::{app::{AppContext, UpdateError}, player::{LoopState, QueueTrack}, track::Track, traits::Expand, Action};
 
 // Errors
 #[derive(Debug, Error)]
@@ -41,6 +41,9 @@ pub enum CmdKind {
     Mute,
     Unmute,
     MuteToggle,
+    LoopNone,
+    LoopQueue,
+    LoopShuffle,
 
     QueueAdd,
     QueueClear,
@@ -86,6 +89,9 @@ impl CmdKind {
             Self::Mute => "Mute audio",
             Self::Unmute => "Unmute audio",
             Self::MuteToggle => "Mute/unmute audio",
+            Self::LoopNone => "Disable looping",
+            Self::LoopQueue => "Repeat the queue after the end",
+            Self::LoopShuffle => "Shuffle and repeat the queue after the end",
 
             Self::QueueAdd => "Add <TRACKS> to the queue",
             Self::QueueClear => "Clear the queue",
@@ -121,7 +127,7 @@ impl Cmd {
 /// Commands
 #[derive(Debug)]
 pub struct Commands {
-    pub list: [Cmd; 37]
+    pub list: [Cmd; 40]
 }
 impl Commands {
     pub fn new() -> Self {
@@ -158,6 +164,9 @@ impl Commands {
             Cmd::Normal("unmute", CmdKind::Unmute),
             Cmd::Normal("mute-toggle", CmdKind::MuteToggle),
             Cmd::Alias("mutetog", CmdKind::MuteToggle, "mute-toggle"),
+            Cmd::Normal("loop-none", CmdKind::LoopNone),
+            Cmd::Normal("loop-queue", CmdKind::LoopQueue),
+            Cmd::Normal("loop-shuffle", CmdKind::LoopShuffle),
 
             Cmd::Normal("queue-add", CmdKind::QueueAdd),
             Cmd::Alias("add", CmdKind::QueueAdd, "queue-add"),
@@ -247,6 +256,9 @@ pub fn exec_command<S: AsRef<str>>(ctx: &mut AppContext, command: S) -> Result<A
         CmdKind::Mute => ctx.player.set_muted(true)?,
         CmdKind::Unmute => ctx.player.set_muted(false)?,
         CmdKind::MuteToggle => ctx.player.mute_toggle()?,
+        CmdKind::LoopNone => ctx.player.set_loop(LoopState::None),
+        CmdKind::LoopQueue => ctx.player.set_loop(LoopState::Queue),
+        CmdKind::LoopShuffle => ctx.player.set_loop(LoopState::Shuffle),
 
         CmdKind::QueueAdd => cmd_add(ctx, args)?,
         CmdKind::QueueClear => ctx.player.queue_clear()?,

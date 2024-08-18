@@ -33,6 +33,10 @@ pub trait Shuffle {
     /// Randomize order of the elements in the vector
     fn shuffle(&mut self);
 }
+pub trait Cycle {
+    fn cycle_next(&self) -> Self;
+    fn cycle_prev(&self) -> Self;
+}
 
 // Implement
 impl<T: AsRef<Path>> Expand for T {

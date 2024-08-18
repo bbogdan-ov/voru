@@ -17,6 +17,7 @@ use crate::{
     match_keys,
     player::{PlaybackError, Player},
     server::ServerAction,
+    traits::Cycle,
     view::{PlayerView, PlaylistsView, QueueView},
     widget::PlayerWidget,
     Action,
@@ -54,8 +55,8 @@ pub enum View {
     Tracks,
     Queue,
 }
-impl View {
-    pub fn cycle_next(&self) -> Self {
+impl Cycle for View {
+    fn cycle_next(&self) -> Self {
         match self {
             Self::Player => Self::Playlists,
             Self::Playlists => Self::Tracks,
@@ -63,7 +64,7 @@ impl View {
             Self::Queue => Self::Player,
         }
     }
-    pub fn cycle_prev(&self) -> Self {
+    fn cycle_prev(&self) -> Self {
         match self {
             Self::Queue => Self::Tracks,
             Self::Tracks => Self::Playlists,
@@ -237,6 +238,7 @@ impl App {
             mute => ctx.player.set_muted(true)?,
             unmute => ctx.player.set_muted(false)?,
             mute_toggle => ctx.player.mute_toggle()?,
+            cycle_loopstate => ctx.player.cycle_loopstate(),
 
             queue_shuffle => ctx.player.queue_shuffle(),
 
@@ -284,6 +286,7 @@ impl App {
                 }
             }
             ServerAction::Volume(vol) => ctx.player.set_volume(vol)?,
+            ServerAction::Loop(state) => ctx.player.set_loop(state),
 
             ServerAction::Next => ctx.player.play_next()?,
             ServerAction::Prev => ctx.player.play_prev()?,

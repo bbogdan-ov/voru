@@ -16,7 +16,12 @@ use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use thiserror::Error;
 
 use crate::{
-    playlist::Playlist, server::Server, track::{Id, Track}, traits::{MoveTo, Shuffle}, AppError, UpdateKind
+    playlist::Playlist,
+    server::Server,
+    track::{Id, Track},
+    traits::{Cycle, MoveTo, Shuffle},
+    AppError,
+    UpdateKind
 };
 
 // Consts
@@ -61,6 +66,44 @@ impl Display for PlayState {
             Self::Paused => write!(f, "paused"),
             Self::Stopped => write!(f, "stopped"),
             Self::Ended => write!(f, "ended"),
+        }
+    }
+}
+
+/// Loop state
+/// I have no idea who in the world uses "Repeat track" (repeat every track once),
+/// so i dont want to implement it
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoopState {
+    /// No loop
+    None,
+    /// Repeat the queue after the end
+    Queue,
+    /// Shuffle and repeat the queue after the end
+    Shuffle
+}
+impl Cycle for LoopState {
+    fn cycle_next(&self) -> Self {
+        match self {
+            Self::None => Self::Queue,
+            Self::Queue => Self::Shuffle,
+            Self::Shuffle => Self::None,
+        }
+    }
+    fn cycle_prev(&self) -> Self {
+        match self {
+            Self::Shuffle => Self::Queue,
+            Self::Queue => Self::None,
+            Self::None => Self::Shuffle,
+        }
+    }
+}
+impl Display for LoopState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "none"),
+            Self::Queue => write!(f, "queue"),
+            Self::Shuffle => write!(f, "shuffle"),
         }
     }
 }
@@ -180,7 +223,8 @@ impl Deref for QueueTrack {
 pub struct PlayerState {
     pub metadata: mpris::Metadata,
 
-    pub status: mpris::PlaybackStatus,
+    pub playstatus: mpris::PlaybackStatus,
+    pub loopstatus: mpris::LoopStatus,
     pub pos: mpris::Time,
     pub volume: f32,
 }
@@ -194,11 +238,13 @@ pub struct Player {
     pub queue_dur: Duration,
     pub elapsed: Duration,
 
+    last_track_index: Option<usize>,
     pub cur_track_index: Option<usize>,
     pub cur_track: Option<Rc<QueueTrack>>,
 
     volume: f32,
     muted: bool,
+    loopstate: LoopState,
     
     pub server: mpris::Server<Server>,
     pub state: Arc<Mutex<PlayerState>>
@@ -220,7 +266,8 @@ impl Player {
         let state = Arc::new(Mutex::new(PlayerState {
             metadata: mpris::Metadata::default(),
 
-            status: mpris::PlaybackStatus::Stopped,
+            playstatus: mpris::PlaybackStatus::Stopped,
+            loopstatus: mpris::LoopStatus::None,
             pos: mpris::Time::default(),
             volume: 1.0
         }));
@@ -251,11 +298,13 @@ impl Player {
             queue_dur: Duration::default(),
             elapsed: Duration::default(),
 
+            last_track_index: None,
             cur_track_index: None,
             cur_track: None,
 
             volume: 1.0,
             muted: false,
+            loopstate: LoopState::None,
 
             server,
             state
@@ -277,22 +326,24 @@ impl Player {
                     mpris::Signal::Seeked { position: pos }
                 )).unwrap();
             }
-            if state.status.ne(&status) {
+            if state.playstatus.ne(&status) {
                 async_std::task::block_on(self.server.properties_changed([
                     mpris::Property::PlaybackStatus(status),
                 ])).unwrap();
             }
             
-            state.status = status;
+            state.playstatus = status;
             state.pos = pos;
         }
 
         if self.cur_track.is_some() {
             let playstate = self.playstate();
 
-            // Play a next track if the current one is ended
-            if !self.current_is_last() && playstate == PlayState::Ended {
-                let _ = self.play_next();
+            if playstate == PlayState::Ended {
+                if self.last_track_index.ne(&self.cur_track_index) {
+                    self.last_track_index = self.cur_track_index;
+                    let _ = self.play_next();
+                }
             }
         }
     }
@@ -328,6 +379,15 @@ impl Player {
             self.playback.set_volume(self.volume)?;
         }
 
+        if let Some(cur_index) = self.cur_track_index {
+            if self.last_track_index.is_some_and(|i| i == track_index) {
+                // Set None if last_track_index is equal to track_index
+                self.last_track_index = None;
+            } else {
+                self.last_track_index = Some(cur_index);
+            }
+        }
+
         self.cur_track_index = Some(track_index);
         self.cur_track = Some(Rc::clone(track));
 
@@ -336,7 +396,6 @@ impl Player {
                 .map(|d| mpris_server::Time::from_micros(d.as_micros() as i64));
 
             state.metadata.set_trackid(ObjectPath::try_from(format!("/org/mpris/MediaPlayer2/voru/{}", track.id.deref())).ok());
-            state.metadata.set_art_url(Some("file:///home/bogdanov/.mozilla/firefox/firefox-mpris/12864_14.png"));
             state.metadata.set_title(track.title().into());
             state.metadata.set_album(track.try_album());
             state.metadata.set_length(len);
@@ -364,11 +423,19 @@ impl Player {
     pub fn play_next(&mut self) -> PlaybackResult {
         let index = self.cur_track_index
             .ok_or(PlaybackError::NotPlaying)?;
-        if index >= self.queue.len().saturating_sub(1) {
-            return Err(PlaybackError::NoMore);
-        }
 
-        self.play(index + 1)
+        if self.current_is_last() {
+            match self.loopstate {
+                LoopState::None => Err(PlaybackError::NoMore),
+                LoopState::Queue => self.replay(),
+                LoopState::Shuffle => {
+                    self.queue_shuffle();
+                    self.replay()
+                }
+            }
+        } else {
+            self.play(index + 1)
+        }
     }
     pub fn play_prev(&mut self) -> PlaybackResult {
         let index = self.cur_track_index
@@ -446,6 +513,20 @@ impl Player {
     pub fn mute_toggle(&mut self) -> PlaybackResult {
         self.set_muted(!self.muted)
     }
+    pub fn set_loop(&mut self, loopstate: LoopState) {
+        self.loopstate = loopstate;
+
+        let loopstatus = match loopstate {
+            LoopState::None => mpris::LoopStatus::None,
+            LoopState::Queue => mpris::LoopStatus::Playlist,
+            LoopState::Shuffle => mpris::LoopStatus::Playlist,
+        };
+
+        self.state.lock().unwrap().loopstatus = loopstatus;
+    }
+    pub fn cycle_loopstate(&mut self) {
+        self.set_loop(self.loopstate.cycle_next());
+    }
 
     /// Returns the current track position
     /// If nothing is playing, returns zero duration
@@ -476,6 +557,9 @@ impl Player {
         } else {
             PlayState::Playing
         }
+    }
+    pub fn loopstate(&self) -> &LoopState {
+        &self.loopstate
     }
     pub fn is_track_current(&self, track_id: &Id) -> bool {
         self.cur_track
