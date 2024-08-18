@@ -218,6 +218,9 @@ impl App {
 
             next_view => ctx.state.next_view(),
             prev_view => ctx.state.prev_view(),
+            player_view => ctx.state.view = View::Player,
+            playlists_view => ctx.state.view = View::Playlists,
+            queue_view => ctx.state.view = View::Queue,
 
             play_next => ctx.player.play_next()?,
             play_prev => ctx.player.play_prev()?,

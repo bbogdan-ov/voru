@@ -154,6 +154,9 @@ pub struct ConfigKeys {
 
     pub next_view: Option<Keymap>,
     pub prev_view: Option<Keymap>,
+    pub player_view: Option<Keymap>,
+    pub playlists_view: Option<Keymap>,
+    pub queue_view: Option<Keymap>,
 
     /// Focus on currently playing track in the queue
     pub queue_focus: Option<Keymap>,
@@ -210,6 +213,9 @@ impl Default for ConfigKeys {
 
             next_view: vec![ key!(Tab) ].into(),
             prev_view: vec![ key!(BackTab) ].into(),
+            player_view: vec![ key!('1') ].into(),
+            playlists_view: vec![ key!('2') ].into(),
+            queue_view: vec![ key!('3') ].into(),
 
             queue_focus: vec![ key!('f') ].into(),
             queue_move_up: vec![ key!(Shift + Up), key!('K') ].into(),
