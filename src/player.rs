@@ -339,11 +339,9 @@ impl Player {
         if self.cur_track.is_some() {
             let playstate = self.playstate();
 
-            if playstate == PlayState::Ended {
-                if self.last_track_index.ne(&self.cur_track_index) {
-                    self.last_track_index = self.cur_track_index;
-                    let _ = self.play_next();
-                }
+            if playstate == PlayState::Ended && self.last_track_index.ne(&self.cur_track_index) {
+                self.last_track_index = self.cur_track_index;
+                let _ = self.play_next();
             }
         }
     }
